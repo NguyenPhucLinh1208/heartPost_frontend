@@ -115,15 +115,13 @@
 //   return context;
 // };
 
-
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, ReactNode } from "react";
 // import { authService } from "@/services/authService"; // Tạm thời comment service thật
 import { LoginCredentials, User, UserCreate } from "@/types/auth";
 
-// --- MOCK DATA (Dữ liệu giả) ---
-// Bạn có thể sửa tên hoặc thông tin tùy ý
+// --- MOCK DATA (Dữ liệu giả để Bypass) ---
 const MOCK_USER: any = {
   id: "dev_user_123",
   email: "developer@heartpost.com",
@@ -161,35 +159,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // 2. Tắt chế độ loading ngay lập tức
   const [isLoading, setIsLoading] = useState(false);
 
-  // --- Logic cũ (Comment lại hết để không gọi API lỗi) ---
-  /*
-  const fetchUser = async (currentToken: string) => {
-      try {
-        const userData = await authService.getMe(currentToken);
-        setUser(userData);
-      } catch (error) {
-        console.error("Session expired or token is invalid.", error);
-        localStorage.removeItem("authToken");
-        setToken(null);
-        setUser(null);
-      }
-  };
-
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const storedToken = localStorage.getItem("authToken");
-      if (storedToken) {
-        setToken(storedToken);
-        await fetchUser(storedToken);
-      }
-      setIsLoading(false);
-    };
-
-    initializeAuth();
-    // ... window event listener logic
-  }, []);
-  */
-
   // --- Fake Functions (Để bấm nút không bị lỗi crash app) ---
 
   const login = async (credentials: LoginCredentials) => {
@@ -201,8 +170,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const register = async (userData: UserCreate) => {
     console.log("DEV MODE: Fake Register Success", userData);
-    // Tự động login sau khi register giả
-    login({ username: userData.email, password: "password" });
+    // FIX: Đổi 'username' thành 'email' để khớp với LoginCredentials interface
+    login({ email: userData.email, password: "password" });
   };
 
   const logout = () => {

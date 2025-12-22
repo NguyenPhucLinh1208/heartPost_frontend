@@ -1,5 +1,3 @@
-// src/components/letter-designer/canvas/envelope/Letter.tsx
-
 import React, { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
@@ -8,51 +6,61 @@ import { letterVertexShader, letterFragmentShader } from './shaders';
 import { createLetterBaseTexture, createPaperGrainTexture } from './utils';
 
 interface LetterProps {
-  color?: string;       // Màu giấy
-  image?: string | null; // Texture giấy hoặc ảnh nội dung
-  isOpen?: boolean;     // Trạng thái bay ra
+  color?: string;           // Màu giấy
+  paperTexture?: string | null;   // Mẫu giấy (Pattern) - 2 mặt
+  contentTexture?: string | null; // Nội dung (Text) - 1 mặt
+  isOpen?: boolean;         
   speed?: number;
 }
 
 export const Letter: React.FC<LetterProps> = ({ 
   color = '#ffffff', 
-  image = null, 
+  paperTexture = null, 
+  contentTexture = null, 
   isOpen = false, 
   speed = 1.0 
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
-  // 1. Texture nền mặc định (Giấy trắng)
-  // Dùng useMemo để chỉ tạo 1 lần
+  // 1. Texture nền mặc định
   const baseTexture = useMemo(() => createLetterBaseTexture(), []);
   
-  // 2. Texture người dùng (Ảnh upload hoặc chọn từ store)
-  // FIX: Thêm xử lý colorSpace để màu sắc hiển thị đúng chuẩn
-  const userTexture = useMemo(() => {
-    if (!image) return null;
-    const tex = new THREE.TextureLoader().load(image);
+  // 2. Load Paper Texture (Mẫu giấy)
+  const userPaperTex = useMemo(() => {
+    if (!paperTexture) return null;
+    const tex = new THREE.TextureLoader().load(paperTexture);
     tex.colorSpace = THREE.SRGBColorSpace; 
     return tex;
-  }, [image]);
+  }, [paperTexture]);
 
-  // 3. Texture vân giấy
+  // 3. Load Content Texture (Nội dung chữ)
+  const userContentTex = useMemo(() => {
+    if (!contentTexture) return null;
+    const tex = new THREE.TextureLoader().load(contentTexture);
+    tex.colorSpace = THREE.SRGBColorSpace; 
+    return tex;
+  }, [contentTexture]);
+
   const grainTexture = useMemo(() => createPaperGrainTexture(), []);
 
   // 4. Uniforms
-  // FIX: Chỉ khởi tạo 1 lần, giá trị sẽ được cập nhật liên tục trong useFrame
   const uniforms = useMemo(() => ({
     uColor: { value: new THREE.Color(color) },
-    uMap: { value: baseTexture },
-    uHasMap: { value: true },
+    
+    // Uniform cho Mẫu giấy
+    uPaperMap: { value: baseTexture }, 
+    uHasPaperMap: { value: false },
+
+    // Uniform cho Nội dung
+    uContentMap: { value: baseTexture },
+    uHasContentMap: { value: false },
+
     uGrainMap: { value: grainTexture },
     uUnfold: { value: 0.0 },
-    uRoughness: { value: 0.6 }
-  }), []); // Empty deps để giữ object reference ổn định
+  }), []); 
 
   const currentProgressRef = useRef(0);
-
-  // --- CẤU HÌNH VỊ TRÍ ANIMATION (Giữ nguyên thông số chuẩn của bạn) ---
   const POS_INSIDE_Z = 0.01; 
   const POS_OUTSIDE_Z = 1.5; 
   const POS_START_Y = 1.0;   
@@ -61,7 +69,7 @@ export const Letter: React.FC<LetterProps> = ({
 
   useFrame((state, delta) => {
     if (meshRef.current && materialRef.current) {
-      // --- PHẦN 1: ANIMATION ---
+      // Animation Logic
       const target = isOpen ? 1 : 0;
       const step = delta * 0.8 * speed; 
       currentProgressRef.current = THREE.MathUtils.lerp(currentProgressRef.current, target, step);
@@ -81,37 +89,37 @@ export const Letter: React.FC<LetterProps> = ({
       
       const currentZ = THREE.MathUtils.lerp(POS_INSIDE_Z, POS_OUTSIDE_Z, phase2);
       meshRef.current.position.z = currentZ;
-
       meshRef.current.rotation.x = phase2 * -0.1;
 
-      // --- PHẦN 2: CẬP NHẬT UNIFORMS (FIX LOGIC MÀU & TEXTURE) ---
+      // Update Uniforms
       const u = materialRef.current.uniforms;
-      
-      // Update trạng thái mở giấy
       u.uUnfold.value = phase3; 
-      
-      // FIX: Update màu giấy Real-time
       u.uColor.value.set(color);
 
-      // FIX: Logic ưu tiên User Texture -> Base Texture
-      if (userTexture) {
-        u.uMap.value = userTexture;
-        u.uHasMap.value = true;
+      // CẬP NHẬT MẪU GIẤY (2 MẶT)
+      if (userPaperTex) {
+        u.uPaperMap.value = userPaperTex;
+        u.uHasPaperMap.value = true;
       } else {
-        u.uMap.value = baseTexture; // Quay về giấy trắng nếu không có ảnh
-        u.uHasMap.value = true;
+        u.uHasPaperMap.value = false;
+      }
+
+      // CẬP NHẬT NỘI DUNG (1 MẶT TRƯỚC)
+      if (userContentTex) {
+        u.uContentMap.value = userContentTex;
+        u.uHasContentMap.value = true;
+      } else {
+        u.uHasContentMap.value = false;
       }
     }
   });
 
-  const LETTER_W = WORLD_W * 0.55; 
+  const LETTER_W = 7.0 * 0.55; 
   const LETTER_H = 4.0;         
 
   return (
     <mesh ref={meshRef} position={[0, 0, POS_INSIDE_Z]}>
-      {/* Giữ nguyên lưới 32x64 để nếp gấp mượt */}
       <planeGeometry args={[LETTER_W, LETTER_H, 32, 64]} />
-      
       <shaderMaterial 
         ref={materialRef}
         vertexShader={letterVertexShader}

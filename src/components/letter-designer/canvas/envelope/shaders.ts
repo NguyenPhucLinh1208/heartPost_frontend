@@ -29,13 +29,13 @@ export const vertexShader = `
     vec3 pos = position;
     vShadow = 1.0;
 
-    // Các điểm chốt (hinge) của nắp phong bì - GIỮ NGUYÊN THÔNG SỐ CỦA BẠN
+    // Các điểm chốt (hinge) của nắp phong bì
     float hingeR = 2.1; 
     float hingeL = -2.1;
     float hingeT = 1.1; 
     float hingeB = -1.1;
 
-    // Bán kính cong
+    // Bán kính cong (để nắp gấp trông mềm hơn)
     float rL = 0.021; 
     float rR = 0.021; 
     float rB = 0.022;  
@@ -85,7 +85,7 @@ export const fragmentShader = `
   uniform vec3 uInnerColor;    // Màu mặt trong
   
   uniform sampler2D uAlphaMap;    // Hình dáng cắt phong bì
-  uniform sampler2D uUserTexture; // Ảnh người dùng upload
+  uniform sampler2D uUserTexture; // Ảnh người dùng upload (cho mặt ngoài)
   uniform bool uHasTexture;       // Cờ kiểm tra có ảnh hay không
   uniform sampler2D uGrainMap;    // Vân giấy
 
@@ -106,6 +106,7 @@ export const fragmentShader = `
       
       if (uHasTexture) {
         vec4 userTex = texture2D(uUserTexture, vUv);
+        // Nhân màu texture với màu nền (Multiply)
         finalSurfaceColor *= userTex.rgb; 
       }
     }
@@ -125,7 +126,7 @@ export const fragmentShader = `
 `;
 
 // ==========================================================
-// PHẦN 2: SHADER CHO LÁ THƯ (LETTER) - GẬP ĐÔI
+// PHẦN 2: SHADER CHO LÁ THƯ (LETTER)
 // ==========================================================
 
 export const letterVertexShader = `
@@ -150,7 +151,6 @@ export const letterVertexShader = `
     vec3 objectNormal = vec3(0.0, 0.0, 1.0);
     vShadow = 1.0;
 
-    // --- LOGIC GẬP ĐÔI (HINGE = 0.0) ---
     float hinge = 0.0; 
     float maxAngle = 3.14; // 180 độ
     float currentAngle = maxAngle * (1.0 - uUnfold);
@@ -176,28 +176,46 @@ export const letterFragmentShader = `
   varying vec3 vNormal;
   varying float vShadow;
 
-  uniform vec3 uColor;          // Màu giấy
-  uniform sampler2D uMap;       // Nội dung thư
-  uniform bool uHasMap;
-  uniform float uRoughness;
-  uniform sampler2D uGrainMap;  // Vân giấy
+  uniform vec3 uColor;          // Màu giấy nền
+  
+  // 1. PAPER TEXTURE (Mẫu giấy từ cửa hàng - Áp dụng 2 mặt)
+  uniform sampler2D uPaperMap;  
+  uniform bool uHasPaperMap;
+
+  // 2. CONTENT TEXTURE (Chữ viết/Ảnh upload - Chỉ mặt trước)
+  uniform sampler2D uContentMap; 
+  uniform bool uHasContentMap;
+
+  uniform sampler2D uGrainMap;  // Vân giấy (Noise)
 
   void main() {
-    vec3 color = uColor;
-    
-    if (uHasMap) {
-      vec4 texColor = texture2D(uMap, vUv);
-      color *= texColor.rgb;
+    // A. Màu nền cơ bản + Vân giấy
+    vec4 grain = texture2D(uGrainMap, vUv * 2.0); 
+    vec3 finalColor = uColor * grain.rgb; 
+
+    // B. Áp dụng Mẫu giấy (Pattern) -> CHO CẢ 2 MẶT
+    if (uHasPaperMap) {
+       vec4 paperTex = texture2D(uPaperMap, vUv);
+       finalColor *= paperTex.rgb;
     }
 
-    vec4 grain = texture2D(uGrainMap, vUv * 2.0); 
-    color *= grain.rgb; 
+    // C. Áp dụng Nội dung (Chữ) -> CHỈ MẶT TRƯỚC
+    // gl_FrontFacing: true nếu là mặt trước, false nếu là mặt sau
+    if (uHasContentMap && gl_FrontFacing) {
+      vec4 contentTex = texture2D(uContentMap, vUv);
+      
+      // Kỹ thuật Alpha Blending:
+      // contentTex.a = 0 (Trong suốt) -> Giữ nguyên màu giấy (finalColor)
+      // contentTex.a = 1 (Đậm) -> Hiện màu nội dung (contentTex.rgb)
+      finalColor = mix(finalColor, contentTex.rgb, contentTex.a);
+    }
 
+    // D. Ánh sáng
     vec3 lightDir = normalize(vec3(0.5, 0.8, 1.0));
     float diff = max(dot(vNormal, lightDir), 0.0);
     
     vec3 lighting = (vec3(0.6) + vec3(0.4) * diff) * vShadow;
 
-    gl_FragColor = vec4(color * lighting, 1.0);
+    gl_FragColor = vec4(finalColor * lighting, 1.0);
   }
 `;
