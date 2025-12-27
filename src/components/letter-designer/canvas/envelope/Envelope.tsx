@@ -1,5 +1,3 @@
-// src/components/letter-designer/canvas/envelope/Envelope.tsx
-
 import React, { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
@@ -16,6 +14,8 @@ interface EnvelopeProps {
   image?: string | null;
   isOpen?: boolean;
   speed?: number;
+  // Callback mới: Báo về khi animation hoàn tất
+  onAnimationComplete?: (isOpen: boolean) => void; 
 }
 
 export const Envelope: React.FC<EnvelopeProps> = ({ 
@@ -23,75 +23,75 @@ export const Envelope: React.FC<EnvelopeProps> = ({
   innerColor = '#f4f4f4',   
   image = null,             
   isOpen = false,           
-  speed = 1.0 
+  speed = 1.0,
+  onAnimationComplete
 }) => {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   
-  // 1. CHUẨN BỊ TEXTURES
   const grainTexture = useMemo(() => createPaperGrainTexture(), []);
   const shapeTexture = useMemo(() => createShapeTexture(), []);
   
-  // Xử lý Texture người dùng:
-  // Nếu image = null, trả về null.
-  // Nếu image có giá trị, tạo loader.
   const userTexture = useMemo(() => {
     if (!image) return null;
     const tex = new THREE.TextureLoader().load(image);
-    tex.colorSpace = THREE.SRGBColorSpace; // Đảm bảo màu sắc chuẩn
+    tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }, [image]);
 
-  // 2. KHỞI TẠO UNIFORMS
-  // Chỉ khởi tạo 1 lần duy nhất, giá trị sẽ được update trong useFrame
   const uniforms = useMemo(() => ({
     uColor: { value: new THREE.Color(color) },
     uInnerColor: { value: new THREE.Color(innerColor) }, 
     uAlphaMap: { value: shapeTexture },
-    uUserTexture: { value: null }, // Mặc định null
+    uUserTexture: { value: null },
     uHasTexture: { value: false },
     uGrainMap: { value: grainTexture },
-    
-    // Các biến điều khiển nắp gấp
     uFoldTop: { value: 1.0 },    
     uFoldRight: { value: 1.0 },  
     uFoldLeft: { value: 1.0 },   
     uFoldBottom: { value: 1.0 }, 
-  }), []); // Empty deps để giữ reference object không đổi
+  }), []); 
 
   const currentOpenRef = useRef(0);
+  const lastReportedState = useRef<boolean | null>(null); // Tránh gọi callback liên tục
 
-  // 3. VÒNG LẶP RENDER
   useFrame((state, delta) => {
     const target = isOpen ? 1 : 0;
-    const step = delta * 2.0 * speed;
-    currentOpenRef.current = THREE.MathUtils.lerp(currentOpenRef.current, target, step);
+    // Tăng tốc độ nội suy để snap vào vị trí nhanh hơn ở đoạn cuối
+    const step = delta * 3.0 * speed; 
     
+    // Lerp giá trị
+    currentOpenRef.current = THREE.MathUtils.lerp(currentOpenRef.current, target, step);
+
+    // LOGIC CHECK HOÀN THÀNH (QUAN TRỌNG)
+    // Nếu khoảng cách tới đích rất nhỏ (< 0.005) -> Coi như đã xong
+    if (Math.abs(currentOpenRef.current - target) < 0.005) {
+        currentOpenRef.current = target; // Snap thẳng vào giá trị đích (0 hoặc 1)
+        
+        // Chỉ gọi callback 1 lần khi trạng thái thay đổi
+        if (lastReportedState.current !== isOpen) {
+            lastReportedState.current = isOpen;
+            if (onAnimationComplete) onAnimationComplete(isOpen);
+        }
+    }
+
     if (materialRef.current) {
       const u = materialRef.current.uniforms;
-      
-      // Update màu sắc (Real-time)
       u.uColor.value.set(color);
       u.uInnerColor.value.set(innerColor);
-      
-      // Update góc mở
       u.uFoldTop.value = 1.0 - currentOpenRef.current;
 
-      // Update Texture
       if (userTexture) {
         u.uUserTexture.value = userTexture;
         u.uHasTexture.value = true;
       } else {
         u.uHasTexture.value = false;
-        // Có thể set uUserTexture.value = null nếu muốn chắc chắn, nhưng uHasTexture là đủ
       }
     }
   });
 
   return (
     <mesh position={[0, 0, 0]}>
-      {/* Lưới 128x128 để đảm bảo đường gấp cong mịn màng */}
       <planeGeometry args={[WORLD_W, WORLD_H, 128, 128]} />
-      
       <shaderMaterial
         ref={materialRef}
         vertexShader={vertexShader}

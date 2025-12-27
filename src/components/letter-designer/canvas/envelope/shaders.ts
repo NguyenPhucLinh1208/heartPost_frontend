@@ -119,7 +119,7 @@ export const fragmentShader = `
     vec3 lightDir = normalize(vec3(0.5, 0.5, 1.0)); 
     float diff = max(dot(vNormal, lightDir), 0.0);
     
-    vec3 lighting = (vec3(0.6) + vec3(0.4) * diff) * vShadow;
+    vec3 lighting = (vec3(0.95) + vec3(0.2) * diff) * vShadow;
     
     gl_FragColor = vec4(finalColor * lighting, 1.0);
   }

@@ -56,6 +56,13 @@ export default function ComposePage() {
   const [speed, setSpeed] = useState(1.0);
   const [isStoreOpen, setIsStoreOpen] = useState(false);
 
+  // --- TRẠNG THÁI KIỂM SOÁT ANIMATION ---
+  // pendingActionRef: Lưu hành động đang chờ (VD: Mở nắp xong thì mở thư)
+  const pendingActionRef = useRef<'OPEN_LETTER' | 'CLOSE_LID' | null>(null);
+  
+  // isLidFullyOpenRef: Theo dõi nắp đã thực sự mở hết 100% chưa
+  const isLidFullyOpenRef = useRef(false);
+
   // State dữ liệu
   const [envelopeData, setEnvelopeData] = useState<DesignState>({ 
     color: '#ffffff', 
@@ -72,7 +79,7 @@ export default function ComposePage() {
   });
   
   const [bgData, setBgData] = useState<DesignState>({ 
-    color: '#E0E7FF', 
+    color: '#ffffff', // Mặc định màu trắng
     texture: null, 
     name: 'Mặc định' 
   });
@@ -83,16 +90,13 @@ export default function ComposePage() {
   // --- HANDLERS ---
   const handleStoreSelect = (type: 'envelope' | 'paper' | 'background', item: AssetItem) => {
     if (type === 'envelope') {
-        // FIX: Giữ nguyên innerColor khi chọn mẫu mới
         setEnvelopeData(prev => ({ 
             ...prev, 
             color: item.color || '#ffffff', 
             texture: item.thumb || null, 
             name: item.name,
-            // innerColor: prev.innerColor (Tự động giữ nguyên do spread ...prev)
         }));
     } else if (type === 'paper') {
-        // FIX: Chỉ cập nhật texture giấy, giữ nguyên nội dung (contentTexture)
         setLetterData(prev => ({ 
             ...prev,
             color: item.color || '#ffffff', 
@@ -117,20 +121,14 @@ export default function ComposePage() {
         const result = ev.target?.result as string;
         
         if (type === 'content') {
-            // FIX: Upload nội dung -> Lưu vào contentTexture
+            // FIX: Chỉ cập nhật nội dung, KHÔNG tự động mở thư
             setLetterData(prev => ({ 
                 ...prev, 
                 contentTexture: result, 
-                // name: 'Nội dung (Upload)' // Có thể cập nhật tên hoặc giữ nguyên tên giấy
             }));
-            if (!isLidOpen) setIsLidOpen(true);
-            setTimeout(() => {
-                if (!isLetterOpen) setIsLetterOpen(true);
-            }, 500);
         } else if (type === 'envelope') {
             setEnvelopeData(prev => ({ ...prev, texture: result, name: 'Ảnh Custom' }));
         } else if (type === 'letter') {
-            // Upload mẫu giấy -> Lưu vào texture
             setLetterData(prev => ({ ...prev, texture: result, name: 'Giấy Custom' }));
         } else if (type === 'background') {
             setBgData(prev => ({ ...prev, texture: result, name: 'Nền Custom' }));
@@ -139,9 +137,77 @@ export default function ComposePage() {
     reader.readAsDataURL(file);
   };
 
-  useEffect(() => {
-    if (!isLidOpen) setIsLetterOpen(false);
-  }, [isLidOpen]);
+  // --- LOGIC ĐIỀU KHIỂN CHÍNH XÁC (CALLBACK BASED) ---
+
+  // Xử lý nút Nắp
+  const handleToggleLid = () => {
+    if (isLidOpen) {
+      // TRƯỜNG HỢP: MUỐN ĐÓNG NẮP
+      // Đánh dấu ngay là nắp không còn mở hoàn toàn nữa
+      isLidFullyOpenRef.current = false;
+
+      if (isLetterOpen) {
+        // Nếu thư đang ở ngoài -> Ra lệnh cất thư trước
+        setIsLetterOpen(false);
+        pendingActionRef.current = 'CLOSE_LID'; // Đánh dấu: Cất xong nhớ đóng nắp nhé
+      } else {
+        // Thư đã ở trong -> Đóng luôn
+        setIsLidOpen(false);
+      }
+    } else {
+      // TRƯỜNG HỢP: MUỐN MỞ NẮP -> Mở luôn
+      setIsLidOpen(true);
+    }
+  };
+
+  // Xử lý nút Thư
+  const handleToggleLetter = () => {
+    const targetState = !isLetterOpen; // Đảo ngược trạng thái mong muốn
+
+    if (targetState) {
+        // TRƯỜNG HỢP: MUỐN XEM THƯ (Mở ra)
+        // Điều kiện: State nắp phải mở VÀ Animation nắp phải xong (isLidFullyOpenRef = true)
+        if (!isLidOpen || !isLidFullyOpenRef.current) {
+            // Nếu nắp chưa mở hoặc đang mở dở -> Mở nắp (nếu cần) và chờ
+            if (!isLidOpen) setIsLidOpen(true);
+            
+            // Đưa vào hàng chờ: Khi nào nắp mở xong (onLidAnimationDone) thì mới mở thư
+            pendingActionRef.current = 'OPEN_LETTER'; 
+        } else {
+            // Nắp đã mở hoàn toàn 100% -> Bay ra luôn
+            setIsLetterOpen(true);
+        }
+    } else {
+        // TRƯỜNG HỢP: MUỐN CẤT THƯ (Thu vào) -> Thu luôn
+        setIsLetterOpen(false);
+    }
+  };
+
+  // CALLBACK TỪ 3D: Nắp đã hoàn thành animation
+  const onLidAnimationDone = (isOpen: boolean) => {
+    // Cập nhật trạng thái vật lý thực tế của nắp
+    if (isOpen) {
+        isLidFullyOpenRef.current = true;
+    } else {
+        isLidFullyOpenRef.current = false;
+    }
+
+    // Kiểm tra hàng chờ xem có lệnh nào đang đợi không
+    if (isOpen && pendingActionRef.current === 'OPEN_LETTER') {
+        // Nắp đã mở 100% -> Giờ cho thư bay ra
+        setIsLetterOpen(true);
+        pendingActionRef.current = null; // Xóa trạng thái chờ
+    }
+  };
+
+  // CALLBACK TỪ 3D: Thư đã hoàn thành animation
+  const onLetterAnimationDone = (isOpen: boolean) => {
+    if (!isOpen && pendingActionRef.current === 'CLOSE_LID') {
+        // Thư đã chui vào 100% -> Giờ đóng nắp
+        setIsLidOpen(false);
+        pendingActionRef.current = null; // Xóa trạng thái chờ
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex h-screen w-screen bg-white font-sans text-black overflow-hidden">
@@ -169,14 +235,15 @@ export default function ComposePage() {
                 image={envelopeData.texture} 
                 isOpen={isLidOpen} 
                 speed={speed} 
+                onAnimationComplete={onLidAnimationDone} // Callback nắp
               />
-              {/* FIX: Truyền cả 2 loại texture vào Letter */}
               <Letter 
                 color={letterData.color} 
                 paperTexture={letterData.texture} 
                 contentTexture={letterData.contentTexture}
                 isOpen={isLetterOpen} 
                 speed={speed} 
+                onAnimationComplete={onLetterAnimationDone} // Callback thư
               />
             </group>
           </Float>
@@ -214,18 +281,16 @@ export default function ComposePage() {
           <NeoSectionTitle icon={Layout} label="Trạng thái" />
           <div className="flex gap-2">
             <button 
-                onClick={() => setIsLidOpen(!isLidOpen)}
+                onClick={handleToggleLid}
                 className={`flex-1 py-2 text-xs font-bold border-2 border-black rounded-md transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-0.5
                     ${isLidOpen ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-50'}`}
             >
               {isLidOpen ? "Đóng Nắp" : "Mở Nắp"}
             </button>
             <button 
-                onClick={() => setIsLetterOpen(!isLetterOpen)}
-                disabled={!isLidOpen}
+                onClick={handleToggleLetter}
                 className={`flex-1 py-2 text-xs font-bold border-2 border-black rounded-md transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-0.5
-                    ${isLetterOpen ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-50'}
-                    ${!isLidOpen && 'opacity-50 cursor-not-allowed shadow-none'}`}
+                    ${isLetterOpen ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-50'}`}
             >
               {isLetterOpen ? "Cất Thư" : "Xem Thư"}
             </button>

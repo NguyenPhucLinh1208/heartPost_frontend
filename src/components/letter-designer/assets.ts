@@ -40,6 +40,18 @@ export const ASSETS: AssetsCollection = {
       thumb: `${PATH_ENV}envelope_03.jpeg`, 
       color: '#ffffff' 
     },
+        { 
+      id: 'env_04', 
+      name: 'Hoa đen', 
+      thumb: `${PATH_ENV}envelope_04.jpeg`, 
+      color: '#ffffff' 
+    },
+    { 
+      id: 'env_05', 
+      name: 'Giấy hồng sẫm', 
+      thumb: `${PATH_ENV}envelope_05.jpeg`, 
+      color: '#ffffff' 
+    },
   ],
   
   // 2. DANH SÁCH GIẤY VIẾT THƯ
@@ -47,19 +59,19 @@ export const ASSETS: AssetsCollection = {
     { 
       id: 'paper_01', 
       name: 'Giấy Tự Nhiên', 
-      thumb: `${PATH_PAPER}paper_01.jpeg`, 
+      thumb: `${PATH_PAPER}paper_01.png`, 
       color: '#ffffff' 
     },
     { 
       id: 'paper_02', 
       name: 'Giấy Kẻ Ngang', 
-      thumb: `${PATH_PAPER}paper_02.jpeg`, 
+      thumb: `${PATH_PAPER}paper_02.png`, 
       color: '#ffffff' 
     },
     { 
       id: 'paper_03', 
       name: 'Giấy Hoa Văn', 
-      thumb: `${PATH_PAPER}paper_03.jpeg`, 
+      thumb: `${PATH_PAPER}paper_03.jpg`, 
       color: '#ffffff' 
     },
   ],

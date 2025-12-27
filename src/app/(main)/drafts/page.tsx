@@ -30,8 +30,10 @@ export default function DraftsPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
 
+  // CẬP NHẬT: Tìm kiếm cả theo Tên người nhận và Chủ đề
   const filteredDrafts = MOCK_DRAFTS.filter(d => 
-    d.subject.toLowerCase().includes(searchTerm.toLowerCase())
+    d.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    d.recipient.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -84,15 +86,18 @@ export default function DraftsPage() {
                         date={draft.date}
                         status="draft"
                         avatar={draft.avatar}
-                        onClick={() => router.push(`/compose?id=${draft.id}`)} // Mở lại trang compose để sửa
+                        onClick={() => router.push(`/compose?id=${draft.id}`)} // Logic tốt: Mở editor với ID nháp
                     />
                 </motion.div>
             ))}
           </div>
       ) : (
           <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-gray-300 rounded-3xl">
-              <FileEdit size={32} className="text-gray-300 mb-4" />
-              <p className="text-xl font-bold text-gray-400">Không có bản nháp nào</p>
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <FileEdit size={32} className="text-gray-400" />
+              </div>
+              <p className="text-xl font-bold text-gray-500">Không có bản nháp nào</p>
+              <p className="text-sm text-gray-400">Hộp thư nháp trống trơn</p>
           </div>
       )}
 
