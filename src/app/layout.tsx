@@ -10,7 +10,7 @@ const beVietnamPro = Be_Vietnam_Pro({
 });
 
 export const metadata = {
-  title: "HeartPost - Gửi Thư Tay, Kết Nối Thật",
+  title: "HeartPost",
   description: "Trải nghiệm gửi thư điện tử chân thật như cầm trên tay.",
 };
 
